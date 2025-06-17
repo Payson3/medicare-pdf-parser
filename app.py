@@ -2,9 +2,9 @@
 from flask import Flask, request, jsonify
 import pdfplumber
 import os
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+
 
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)

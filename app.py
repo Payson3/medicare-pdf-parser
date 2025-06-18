@@ -1,26 +1,23 @@
 from flask import Flask, request, jsonify
 import pdfplumber
 import os
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
 @app.route('/extract', methods=['POST'])
 def extract_text():
     try:
-        # Check if any files were sent
         if not request.files:
-            return jsonify({'error': 'No files found in request'}), 400
+            return jsonify({'error': 'No files in the request'}), 400
 
-        extracted_results = []
+        extracted_data = []
 
         for key in request.files:
             file = request.files[key]
-            if file.filename == '':
-                continue  # skip if filename is empty
+            if not file or file.filename == '':
+                continue
 
-            filename = secure_filename(file.filename)
-            temp_path = os.path.join('/tmp', filename)
+            temp_path = os.path.join('/tmp', file.filename)
             file.save(temp_path)
 
             text = ''
@@ -30,20 +27,15 @@ def extract_text():
 
             os.remove(temp_path)
 
-            extracted_results.append({
-                'filename': filename,
+            extracted_data.append({
+                'filename': file.filename,
                 'text': text
             })
 
-        if not extracted_results:
-            return jsonify({'error': 'No valid files were processed'}), 400
+        if not extracted_data:
+            return jsonify({'error': 'No valid PDFs processed'}), 400
 
-        return jsonify({'documents': extracted_results})
+        return jsonify({'documents': extracted_data})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
-
-

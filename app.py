@@ -8,25 +8,42 @@ app = Flask(__name__)
 @app.route('/extract', methods=['POST'])
 def extract_text():
     try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file part in the request'}), 400
+        # Check if any files were sent
+        if not request.files:
+            return jsonify({'error': 'No files found in request'}), 400
 
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No selected file'}), 400
+        extracted_results = []
 
-        filename = secure_filename(file.filename)
-        temp_path = os.path.join('/tmp', filename)
-        file.save(temp_path)
+        for key in request.files:
+            file = request.files[key]
+            if file.filename == '':
+                continue  # skip if filename is empty
 
-        text = ''
-        with pdfplumber.open(temp_path) as pdf:
-            for page in pdf.pages:
-                text += page.extract_text() or ''
+            filename = secure_filename(file.filename)
+            temp_path = os.path.join('/tmp', filename)
+            file.save(temp_path)
 
-        os.remove(temp_path)
-        return jsonify({'text': text})
+            text = ''
+            with pdfplumber.open(temp_path) as pdf:
+                for page in pdf.pages:
+                    text += page.extract_text() or ''
+
+            os.remove(temp_path)
+
+            extracted_results.append({
+                'filename': filename,
+                'text': text
+            })
+
+        if not extracted_results:
+            return jsonify({'error': 'No valid files were processed'}), 400
+
+        return jsonify({'documents': extracted_results})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
+
 

@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import pdfplumber
 import os
+import uuid
 
 app = Flask(__name__)
 
@@ -8,16 +9,13 @@ app = Flask(__name__)
 def extract_text():
     try:
         if not request.files:
-            return jsonify({'error': 'No files in the request'}), 400
+            return jsonify({'error': 'No files uploaded'}), 400
 
-        extracted_data = []
-
+        results = []
         for key in request.files:
             file = request.files[key]
-            if not file or file.filename == '':
-                continue
-
-            temp_path = os.path.join('/tmp', file.filename)
+            filename = f"{uuid.uuid4()}_{file.filename}"
+            temp_path = os.path.join('/tmp', filename)
             file.save(temp_path)
 
             text = ''
@@ -26,16 +24,12 @@ def extract_text():
                     text += page.extract_text() or ''
 
             os.remove(temp_path)
-
-            extracted_data.append({
+            results.append({
                 'filename': file.filename,
-                'text': text
+                'text': text.strip()
             })
 
-        if not extracted_data:
-            return jsonify({'error': 'No valid PDFs processed'}), 400
-
-        return jsonify({'documents': extracted_data})
+        return jsonify({'results': results}), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500

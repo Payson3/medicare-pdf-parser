@@ -1,12 +1,10 @@
 from flask import Flask, request, jsonify
-import pdfplumber
+import fitz  # PyMuPDF
 import os
 import uuid
 import logging
 
 app = Flask(__name__)
-
-# Optional: Enable basic logging to Render logs
 logging.basicConfig(level=logging.INFO)
 
 @app.route('/extract', methods=['POST'])
@@ -25,16 +23,17 @@ def extract_text():
 
             text = ''
             try:
-                with pdfplumber.open(temp_path) as pdf:
-                    for page_number, page in enumerate(pdf.pages, start=1):
-                        try:
-                            page_text = page.extract_text()
-                            if page_text:
-                                text += page_text + '\n'
-                            else:
-                                logging.warning(f"No text found on page {page_number} of {file.filename}")
-                        except Exception as page_err:
-                            logging.error(f"Error extracting text from page {page_number} of {file.filename}: {page_err}")
+                doc = fitz.open(temp_path)
+                for page_number, page in enumerate(doc, start=1):
+                    try:
+                        page_text = page.get_text("text")  # Use "text" or "blocks" as needed
+                        if page_text:
+                            text += page_text + '\n'
+                        else:
+                            logging.warning(f"No text found on page {page_number} of {file.filename}")
+                    except Exception as page_err:
+                        logging.error(f"Error extracting text from page {page_number} of {file.filename}: {page_err}")
+                doc.close()
             except Exception as file_err:
                 logging.error(f"Error opening PDF file {file.filename}: {file_err}")
                 os.remove(temp_path)

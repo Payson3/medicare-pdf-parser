@@ -1,57 +1,39 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import fitz  # PyMuPDF
-import os
-import uuid
-import logging
+import io
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
+CORS(app)
 
-@app.route('/extract', methods=['POST'])
+# Set max request size to 32 MB
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32 MB
+
+@app.route("/extract", methods=["POST"])
 def extract_text():
     try:
-        if not request.files:
-            return jsonify({'error': 'No files uploaded'}), 400
-
+        pdf_files = request.files.to_dict()
         results = []
 
-        # Convert ImmutableMultiDict to standard dict with list values
-        files_dict = request.files.to_dict(flat=False)
+        for field_name, file_storage in pdf_files.items():
+            file_bytes = file_storage.read()
+            pdf = fitz.open(stream=file_bytes, filetype="pdf")
+            text = "\n".join([page.get_text() for page in pdf])
+            results.append({
+                "filename": file_storage.filename,
+                "text": text
+            })
 
-        # Iterate through all files under all keys (e.g., 'data', 'data1', 'data2')
-        for key in files_dict:
-            for file in files_dict[key]:
-                filename = f"{uuid.uuid4()}_{file.filename}"
-                temp_path = os.path.join('/tmp', filename)
-                file.save(temp_path)
-
-                text = ''
-                try:
-                    doc = fitz.open(temp_path)
-                    for page_number, page in enumerate(doc, start=1):
-                        try:
-                            page_text = page.get_text("text")
-                            if page_text:
-                                text += page_text + '\n'
-                            else:
-                                logging.warning(f"No text on page {page_number} of {file.filename}")
-                        except Exception as page_err:
-                            logging.error(f"Error on page {page_number} of {file.filename}: {page_err}")
-                    doc.close()
-                except Exception as file_err:
-                    logging.error(f"Error opening PDF {file.filename}: {file_err}")
-                    os.remove(temp_path)
-                    continue  # Skip this file if unreadable
-
-                os.remove(temp_path)
-
-                results.append({
-                    'filename': file.filename,
-                    'text': text.strip()
-                })
-
-        return jsonify({'results': results}), 200
-
+        return jsonify(results)
+    
     except Exception as e:
-        logging.error(f"Unhandled exception in extract_text: {e}")
-        return jsonify({'error': str(e)}), 500
+        app.logger.error(f"Unhandled exception in extract_text: {str(e)}")
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
+
+# Handle file too large error
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify(error="File too large", message=str(e)), 413
+
+if __name__ == "__main__":
+    app.run(debug=False, host='0.0.0.0', port=5000)
